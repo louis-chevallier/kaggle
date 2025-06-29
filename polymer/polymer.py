@@ -1,5 +1,11 @@
 import os
+
 #os.system ('pip install utillc')
+
+
+#!pip install utillc
+#!pip install rdkit
+
 lh = 'Localhost'
 on_kaggle = os.environ.get('KAGGLE_KERNEL_RUN_TYPE', lh) != lh
 from utillc import *
@@ -28,6 +34,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD,PCA
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
+from sklearn.metrics import mean_absolute_error as mae
 import pickle
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -39,8 +46,6 @@ RDLogger.DisableLog('rdApp.*')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-# Input data files are available in the read-only "../input/" directory
-# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
 
 data_folder = "/kaggle/input/neurips-open-polymer-prediction-2025/" if on_kaggle else "/mnt/hd1/data/kaggle/polymer"
 
@@ -51,6 +56,7 @@ for dirname, _, filenames in os.walk(data_folder) :
         EKON(os.path.join(dirname, filename))
 
 
+deep_keys = []
 if do_deep :
 	checkpoint = 'unikei/bert-base-smiles'
 	tokenizer = BertTokenizerFast.from_pretrained(checkpoint)
@@ -99,11 +105,13 @@ def comp(ss, fn) :
 	else :
 		descriptors = [compute_all_descriptors(smi) for smi in tqdm.tqdm(ss['SMILES'].to_list()) ]
 		descriptors = pd.DataFrame(descriptors, columns=desc_names)
-
-		deep_desc =  [compute_deep_desc(smi) for smi in tqdm.tqdm(ss['SMILES'].to_list()) ]
-		deep_desc = pd.DataFrame(deep_desc, columns=deep_keys)
+		res = pd.concat([ss,descriptors],axis=1)
 		
-		res = pd.concat([ss,descriptors, deep_desc],axis=1)
+		if do_deep :
+			deep_desc =  [compute_deep_desc(smi) for smi in tqdm.tqdm(ss['SMILES'].to_list()) ]
+			deep_desc = pd.DataFrame(deep_desc, columns=deep_keys)
+			res = pd.concat([res, deep_desc],axis=1)
+			
 		res.to_pickle(fn)
 		return res
 
@@ -178,16 +186,16 @@ def lgb_kfold(train_df, test_df, target, feats, folds):
 	df_importances = pd.DataFrame()
 
 	for n_fold, (train_idx, valid_idx) in enumerate(folds.split(train_df, train_df[target])):	  
-		EKON ('n_fold:',n_fold)
+		EKON('n_fold:',n_fold, target)
 
 		train_x = train_df[feats].iloc[train_idx].values
 		train_y = train_df[target].iloc[train_idx].values
 		valid_x = train_df[feats].iloc[valid_idx].values
 		valid_y = train_df[target].iloc[valid_idx].values
 		test_x = test_df[feats]
-		EKON (train_x.shape)
-		EKON (valid_x.shape)	  
-		EKON (test_x.shape)  
+		EKON(train_x.shape)
+		EKON(valid_x.shape)	  
+		EKON(test_x.shape)  
 		EKOX(train_y.shape)
 		dtrain = lgb.Dataset(train_x, label=train_y, )
 		dval = lgb.Dataset(valid_x, label=valid_y, reference=dtrain, ) 
@@ -221,14 +229,14 @@ def lgb_kfold(train_df, test_df, target, feats, folds):
 		#bst.save_model(model_path+'lgb_fold_' + str(n_fold) + '.txt', num_iteration=bst.best_iteration)	 
 
 		df_importances = pd.concat([df_importances,df_importance])	  
-		
+	EKON(target, oof_preds.shape, train_df[target].shape)	
 	cv = mae(train_df[target],  oof_preds)
 	EKON(cv)	
 	return oof_preds,sub_preds
 
-
-
+EKOT("X");
 train_data_X, cols_X, train_data_X_df = check(train_data_X, train_data_X_df.columns)
+EKOT("y")
 train_data_y, cols_y, train_data_y_df = check(train_data_y, train[targets].columns)
 
 EKOX(len(cols_X))
@@ -271,7 +279,8 @@ for t in targets:
 	if len(test)< 2 :
 		test[t] = 0
 	else:
-		oof_preds,sub_preds = lgb_kfold(train_df, test_scaled, t, cols_X, folds)
+		train_df_f = train_df[train[t].notnull()]
+		oof_preds,sub_preds = lgb_kfold(train_df_f, test_scaled, t, cols_X, folds)
 		test[t] = sub_preds
 
 EKOX(test.columns)
@@ -281,5 +290,7 @@ t1 = test['id']
 t2 = pd.DataFrame(final_vals, columns=targets)
 res = pd.concat((t1, t2), axis=1)
 
+# Generate submission
 
 res[['id','Tg', 'FFV', 'Tc', 'Density', 'Rg']].to_csv('submission.csv',index=False)
+EKOT("done")
