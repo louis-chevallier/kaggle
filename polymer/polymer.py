@@ -483,7 +483,7 @@ def main() :
 		EKOX(y)
 
 		
-		[ train_deep(*e) for e in y]
+		#[ train_deep(*e) for e in y]
 
 		
 		for t in targets:

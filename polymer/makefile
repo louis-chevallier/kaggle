@@ -34,6 +34,6 @@ upload :
 	kaggle datasets list -m
 #	kaggle datasets status lmdm99/wheels-dataset
 #	kaggle datasets init -p upload
-#	kaggle datasets version -m "$(COMMENT)" -p  $(DATASET_FOLDER) -t -r zip
-	kaggle datasets create  -p  $(DATASET_FOLDER) -t -r zip
+	kaggle datasets version -m "$(COMMENT)" -p  $(DATASET_FOLDER) -t -r zip
+#	kaggle datasets create  -p  $(DATASET_FOLDER) -t -r zip
 	kaggle datasets list -m
