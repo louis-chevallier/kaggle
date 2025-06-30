@@ -10,7 +10,7 @@ print_everything()
 
 EKOX(on_kaggle)
 EKOX(utillc.__version__)
-
+import itertools
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import NMF
 from sklearn.impute import SimpleImputer
@@ -157,10 +157,13 @@ EKOX(train_data_df.describe())
 train_data_X_df = train.drop(["SMILES"] + targets + list(deep_keys), axis='columns')
 
 train_data_X = train_data_X_df.to_numpy()
+
+_, Dx = train_data_X.shape
 EKOX(train_data_X_df.describe())
 EKOX(train[targets].describe())
 
 train_data_y = train[targets].to_numpy()
+_, Dy = train_data_y.shape
 
 
 def check(d, cols) :
@@ -333,9 +336,6 @@ test_scaled = pd.DataFrame(scaler_X.transform(test_scaled.values), columns=cols_
 EKON(train_df.describe())
 
 
-X_train, X_valid, y_train, y_valid = train_test_split(train_df.drop(targets, axis='columns'),
-													  train_df[targets],
-													  test_size=1/6, random_state=42)
 
 class Polymer(Dataset):
 	def __init__(self, X, y=None, transform=None):
@@ -359,126 +359,131 @@ transform=transforms.Compose([
 ])
 
 
-_, Dx = X_train.shape
-_, Dy = y_train.shape
+def train_deep(DD=100, depth=4) :
 
-train_dataset = Polymer(X=X_train, y=y_train, transform=transform)
-valid_dataset = Polymer(X=X_valid, y=y_valid, transform=transforms.ToTensor())
+		_, Dx = train_df.drop(targets, axis='columns').shape
+		_, Dy = train_df[targets].shape
+		EKON(Dx, Dy)
+		EKON(DD, depth)
+		class MLP(nn.Module):
+			def __init__(self):
+				super(MLP, self).__init__()
+				l = [ nn.Linear(Dx, DD),
+					nn.ReLU() ]
+				lf = lambda _ : [ nn.Linear(DD, DD), nn.ReLU() ]
+				l += [ e for ee in list(map(lf, range(depth))) for e in ee]
+				l += [ nn.Linear(DD, 100),
+					   nn.ReLU(),
+					   nn.Linear(100, Dy) ]
+				#EKOX(l)
+				self.layers = nn.Sequential(*l)
 
-train_loader = DataLoader(dataset=train_dataset, batch_size=12, shuffle=True)
-valid_loader = DataLoader(dataset=valid_dataset, batch_size=12, shuffle=False)
+			def forward(self, x):
+				x = x.view(x.size(0), -1)
+				x = self.layers(x)
+				return x
 
-class MLP(nn.Module):
-	def __init__(self):
-		super(MLP, self).__init__()
-		self.layers = nn.Sequential(
-			nn.Linear(Dx, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, 100),
-			nn.ReLU(),
-			nn.Linear(100, Dy)
-		)
-		
-	def forward(self, x):
-		x = x.view(x.size(0), -1)
-		x = self.layers(x)
-		return x
+		model = MLP()
 
-model = MLP()
+		optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-def my_loss(output, target) :
-		m = torch.isnan(target)
-		o, t = output[~m], target[~m]
-		return torch.nn.functional.l1_loss(o, t)
+		def my_loss(output, target) :
+				m = torch.isnan(target)
+				o, t = output[~m], target[~m]
+				return torch.nn.functional.l1_loss(o, t)
 
 
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-loss_fn = nn.CrossEntropyLoss()
-
-mean_train_losses = []
-mean_valid_losses = []
-valid_acc_list = []
-epochs = 15
+		optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
 
-def deep() :
-		for epoch in range(epochs):
-			model.train()
-
-			train_losses = []
-			valid_losses = []
-			for i, (images, labels) in enumerate(train_loader):
-				optimizer.zero_grad()
-				outputs = model(images)
-				loss = loss_fn(outputs, labels)
-				loss = my_loss(outputs, labels)
-				loss.backward()
-				optimizer.step()
-				train_losses.append(loss.item())
+		mean_train_losses = []
+		mean_valid_losses = []
+		valid_acc_list = []
+		epochs = 30
 
 
-			model.eval()
-			correct = 0
-			total = 0
-			with torch.no_grad():
-				for i, (images, labels) in enumerate(valid_loader):
-					outputs = model(images)
-					loss = my_loss(outputs, labels)
-					valid_losses.append(loss.item())
+		def deep() :
+				for epoch in range(epochs):
 
-					m = torch.isnan(labels)
-					o, t = outputs[~m], labels[~m]
-					"""
-					EKOX(outputs)
-					EKOX(labels)
-					EKOX(m)
-					EKOX(o)
-					EKOX(t)
-					EKOX(o.shape)
-					EKOX(t.shape)
-					EKOX(outputs.shape)
-					EKOX(labels.shape)
-					EKOX(torch.abs(o-t).shape)
-					EKOX((o-t).abs().mean(dim=0).shape)
-					sys.exit(0)
-					"""
+					X_train, X_valid, y_train, y_valid = train_test_split(train_df.drop(targets, axis='columns'),
+																		  train_df[targets],
+																		  test_size=1/6, random_state=42)
+					_, Dx = X_train.shape
+					_, Dy = y_train.shape
+
+					train_dataset = Polymer(X=X_train, y=y_train, transform=transform)
+					valid_dataset = Polymer(X=X_valid, y=y_valid, transform=transforms.ToTensor())
+
+					train_loader = DataLoader(dataset=train_dataset, batch_size=12*2, shuffle=True)
+					valid_loader = DataLoader(dataset=valid_dataset, batch_size=1, shuffle=False)
+
+
+					model.train()
+
+					train_losses = []
+					valid_losses = []
+					el = lambda _ : []
+					valid_lossess = list(map(el, range(len(targets))))
+
+					for i, (images, labels) in enumerate(train_loader):
+						optimizer.zero_grad()
+						outputs = model(images)
+						loss = my_loss(outputs, labels)
+						loss.backward()
+						optimizer.step()
+						train_losses.append(loss.item())
+
+
+					model.eval()
+					correct = 0
+					total = 0
+					with torch.no_grad():
+						for i, (images, labels) in enumerate(valid_loader):
+							outputs = model(images)
+							loss = my_loss(outputs, labels)
+							valid_losses.append(loss.item())
+							for i, (eo, el) in enumerate(zip(outputs[0], labels[0])) :
+								if not torch.isnan(el) :
+									ee = (eo-el).abs()
+									valid_lossess[i].append(ee)
+
+							m = torch.isnan(labels)
+							o, t = outputs[~m], labels[~m]
+
+					mean_train_losses.append(np.mean(train_losses))
+					mean_valid_losses.append(np.mean(valid_losses))
+					#EKON(epoch, epoch+1, np.mean(train_losses), np.mean(valid_losses))
+					if False :
+							for i, t in enumerate(targets) :
+									EKON(i, t, np.mean(valid_lossess[i]))
+									EKON(len(valid_lossess[i]))
+
+
+				EKO()
+				if False :
+					fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(15, 10))
+					ax1.plot(mean_train_losses, label='train')
+					ax1.plot(mean_valid_losses, label='valid')
+					lines, labels = ax1.get_legend_handles_labels()
+					ax1.legend(lines, labels, loc='best')
 					
-
-			mean_train_losses.append(np.mean(train_losses))
-			mean_valid_losses.append(np.mean(valid_losses))
-			EKON(epoch, epoch+1, np.mean(train_losses), np.mean(valid_losses))
-		EKO()
-		fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(15, 10))
-		ax1.plot(mean_train_losses, label='train')
-		ax1.plot(mean_valid_losses, label='valid')
-		lines, labels = ax1.get_legend_handles_labels()
-		ax1.legend(lines, labels, loc='best')
-
-		ax2.plot(valid_acc_list, label='valid acc')
-		ax2.legend()
-		plt.show()
-
+					ax2.plot(valid_acc_list, label='valid acc')
+					ax2.legend()
+					plt.show()
+				EKON(np.mean(train_losses), np.mean(valid_losses))
+				return np.mean(train_losses), np.mean(valid_losses)
+		return deep()
 
 def main() :
 
-		deep()
+		y = list(itertools.product([10, 50, 100, 200],
+								   [2, 3, 4, 7 ]))
+
+		EKOX(y)
+
+		
+		[ train_deep(*e) for e in y]
 
 		
 		for t in targets:
