@@ -68,10 +68,12 @@ EKOX(data_folder)
 EKOX(torch.__version__)
 EKOX(torch.cuda.is_available())
 EKOX(torch.version.cuda)
-a=torch.rand(5,3).cuda()
-EKOX(torch.cuda.get_device_properties(0))
-EKOT('so far so good, torch works with cuda')
-
+try :
+		a=torch.rand(5,3).cuda()
+		EKOX(torch.cuda.get_device_properties(0))
+		EKOT('so far so good, torch works with cuda')
+except :
+		EKOT("no cuda")
 
 for dirname, _, filenames in os.walk(data_folder) : 
 	for filename in filenames:
@@ -477,13 +479,13 @@ def train_deep(DD=100, depth=4) :
 
 def main() :
 
-		y = list(itertools.product([10, 50, 100, 200],
+		y = list(itertools.product([100, 200, 300, 400],
 								   [2, 3, 4, 7 ]))
 
 		EKOX(y)
 
 		
-		#[ train_deep(*e) for e in y]
+		[ train_deep(*e) for e in y]
 
 		
 		for t in targets:
