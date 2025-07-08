@@ -191,8 +191,23 @@ class GBMPredictor :
 	def __init__(self, mdl) :
 		self.mdl = mdl
 		#EKOX(mdl)
+		self.thresholds = {}
+		for i, tsd in enumerate(self.mdl["tree_info"]) :
+			tree = tsd["tree_structure"]
+			self.parse(tree, "%03d" % i)
+		EKOX(len(self.thresholds))
+	def parse(self, tree, tag) :
+		if "threshold" in tree :
+			feat_idx = tree["split_feature"]
+			threshold = tree["threshold"]
+			self.thresholds[tag] = threshold
+			self.parse(tree["left_child"], tag + "_l")
+			self.parse(tree["right_child"], tag + "_r")
+		else :
+			value = tree["leaf_value"]
+			return value
 
-	def pred2(self, row, tree) :
+	def pred2(self, row, tree, tag="") :
 		if "threshold" in tree :
 			feat_idx = tree["split_feature"]
 			threshold = tree["threshold"]
@@ -208,7 +223,7 @@ class GBMPredictor :
 		v = 0
 		for i, tsd in enumerate(tree_info) :
 			tree = tsd["tree_structure"]
-			v += self.pred2(row, tree)
+			v += self.pred2(row, tree, "%03d" % i)
 		return v
 
 	def predict(self, x) :
@@ -289,15 +304,13 @@ def lgb_kfold(train_df, test_df, target, feats, folds):
 		cv_list.append(oof_cv)
 		EKON (cv_list)
 
-			 
-		
 		sub_preds += bst.predict(test_x, num_iteration=bst.best_iteration) / n_splits
 		mdl = bst.dump_model()
 		
 		gbm_predictor = GBMPredictor(mdl)
 		pg = gbm_predictor.predict(valid_x)
 		EKOX(valid_y.shape)
-		EKON(np.isclose(mae(valid_y,  pg), mae(valid_y,  oof_preds[valid_idx])))
+		assert(np.isclose(mae(valid_y,  pg), mae(valid_y,  oof_preds[valid_idx])))
 		
 		#bst.save_model(model_path+'lgb_fold_' + str(n_fold) + '.txt', num_iteration=bst.best_iteration)	 
 
