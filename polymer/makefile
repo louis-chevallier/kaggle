@@ -8,7 +8,11 @@ $(warning $(COMMENT))
 
 
 start :
-	CUDA_VISIBLE_DEVICES=0 python polymer.py 2>&1 | tee trace-$(DATE).trc
+	CUDA_VISIBLE_DEVICES=0 python tree.py 2>&1 | tee trace-$(DATE).trc
+
+
+start3 :
+CUDA_VISIBLE_DEVICES=0 python polymer.py 2>&1 | tee trace-$(DATE).trc
 #	CUDA_VISIBLE_DEVICES=0 python multi.py
 
 
