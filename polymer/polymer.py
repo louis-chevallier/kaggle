@@ -6,6 +6,7 @@ lh = 'Localhost'
 on_kaggle = os.environ.get('KAGGLE_KERNEL_RUN_TYPE', lh) != lh
 import utillc
 from utillc import *
+import json
 print_everything()
 
 EKOX(on_kaggle)
@@ -43,6 +44,7 @@ from sklearn.decomposition import TruncatedSVD,PCA
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from sklearn.metrics import mean_absolute_error as mae
+from sklearn.metrics import root_mean_squared_error as rmse
 import pickle
 
 import torch.nn as nn
@@ -185,6 +187,40 @@ def check(d, cols) :
 	ddd, lll = d[:,nn], list(cols[nn])
 	return ddd, lll, pd.DataFrame(ddd, columns=lll)
 
+class GBMPredictor :
+	def __init__(self, mdl) :
+		self.mdl = mdl
+		#EKOX(mdl)
+
+	def pred2(self, row, tree) :
+		if "threshold" in tree :
+			feat_idx = tree["split_feature"]
+			threshold = tree["threshold"]
+			t = row[feat_idx] <= threshold
+			tt = t if tree["decision_type"] == "<=" else not t
+			side = "left_child" if t else "right_child"
+			return self.pred2(row, tree[side])
+		else :
+			value = tree["leaf_value"]
+			return value
+			
+	def pred1(self, row, tree_info) :
+		v = 0
+		for i, tsd in enumerate(tree_info) :
+			tree = tsd["tree_structure"]
+			v += self.pred2(row, tree)
+		return v
+
+	def predict(self, x) :
+		h, _ = x.shape
+		p = np.zeros(h)
+		for i, row in enumerate(x) :
+			p[i] = self.pred1(row, self.mdl["tree_info"])
+			
+
+		
+		return p
+
 
 def lgb_kfold(train_df, test_df, target, feats, folds):	   
 	params = {	  
@@ -249,18 +285,31 @@ def lgb_kfold(train_df, test_df, target, feats, folds):
 		df_importance['fold'] = n_fold
 		
 		oof_preds[valid_idx] = bst.predict(valid_x, num_iteration=bst.best_iteration)
-		# oof_cv = rmse(valid_y,  oof_preds[valid_idx])
-		# cv_list.append(oof_cv)
-		# EKON (cv_list)
+		oof_cv = mae(valid_y,  oof_preds[valid_idx])
+		cv_list.append(oof_cv)
+		EKON (cv_list)
+
+			 
 		
 		sub_preds += bst.predict(test_x, num_iteration=bst.best_iteration) / n_splits
+		mdl = bst.dump_model()
+		
+		gbm_predictor = GBMPredictor(mdl)
+		pg = gbm_predictor.predict(valid_x)
+		EKOX(valid_y.shape)
+		EKON(np.isclose(mae(valid_y,  pg), mae(valid_y,  oof_preds[valid_idx])))
 		
 		#bst.save_model(model_path+'lgb_fold_' + str(n_fold) + '.txt', num_iteration=bst.best_iteration)	 
 
 		df_importances = pd.concat([df_importances,df_importance])	  
 	EKON(target, oof_preds.shape, train_df[target].shape)	
 	cv = mae(train_df[target],	oof_preds)
-	EKON(cv)	
+	EKON(cv)
+
+	mdl = bst.dump_model()
+	with open('lgb_fold_' + target + "_" + str(n_fold) + '.json', 'w') as fichier:
+		json.dump(mdl, fichier, indent=4)
+	
 	return oof_preds,sub_preds
 
 
