@@ -5,37 +5,60 @@ import pandas as pd
 import os, sys, glob
 import tqdm, re
 import pickle
+from collections import defaultdict
+import hashlib
+import seaborn as sns
+import matplotlib.pyplot as plt
+import datetime
 
 
+def myhash(s) :
+		"""
+		because default hash produces diff values on successive exec ( random seed) 
+		"""
+		hash_obj = hashlib.sha256(s.encode('utf-8'))
+		hex_hash = str(hash_obj.hexdigest())
+		return hex_hash
 
 files = glob.glob("/mnt/NUC/download/List*Ventes*.pdf")
+files = glob.glob("/tmp/erquy/List*Ventes*.pdf")
 EKOX(files)
 
 def extract(file) :
 	os.system("pdftotext -layout '%s' out.txt" % file)
+	EKOX(file)
 	with open("out.txt") as f:
 		lines = f.readlines()
 		def x(l) :
 			try :
-				spaces, word, number = " +", "([\w/-]+)", "([\d]+)"
+				spaces, word, numbers = " +", "([\w/-]+)", "([\d]+)"
 				match = re.search(word + spaces + word + spaces + word + spaces + word, l)
 				ville = match.group(4)
 				_, e = match.span()
-				match = re.search('(' + number + "/" + number + '/' + number + ")", l)
-				date = match.group(1)
+				match = re.search('(' + numbers + "/" + numbers + '/' + numbers + ")", l)
+				date_transaction = match.group(1)
+				date_transaction = datetime.datetime.strptime(date_transaction, "%d/%m/%Y").date()
+				
 				e1, e3 = match.span()
+				match = re.search('(' + numbers + "/" + numbers + '/' + numbers + ")" + spaces + numbers, l)
+				annee_construction = int(match.group(5))
 				add = l[e:e1].strip()
 				l3 = l[e3:]
 				match = re.search(word + spaces + word + spaces, l3)
 				_, e4 = match.span()
 				l4 = l3[e4:]
 				match = re.search(word + spaces + word+ spaces + word+ spaces + word, l4)
-				prix = match.group(1)+match.group(2)
-				surface = match.group(4)
-				#EKON(ville, date, prix, surface, add)
+				prix = int(match.group(1) + match.group(2))
+				surface = int(match.group(4))
+				match = re.search(word + spaces + word+ spaces + word+ spaces + word, l4)				
+				terrain = int(match.group(3))
+				#EKON(ville, date_transaction, annee_construction, prix, surface, terrain, add)
+				
 
-				return add +  "; " + ville + "; FRANCE", date, prix, surface
-			except :
+				return add +  "; " + ville + "; FRANCE", date_transaction, prix, surface, annee_construction, terrain
+			except Exception as e:
+				#EKOX(l)	
+				#EKOX(e)
 				return None
 		return [ e for e in map(x, lines) if e is not None]
 
@@ -43,7 +66,7 @@ ll = [e for l in list(map(extract, files)) for e in l]
 #EKOX(ll)
 EKOX(len(ll))
 add=ll[0]
-a, date, prix, surface = add
+a, date, prix, surface, annee, terrain = add
 EKOX(a)
 
 g = geocoder.arcgis(a).latlng
@@ -62,8 +85,25 @@ tile = folium.TileLayer(
        ).add_to(m)
 
 
-lfn = "latlong.pckl"
+EKOX(myhash(str(ll)))
+
+lfn = "latlong_%s.pckl" % myhash(str(ll))
+EKOX(lfn)
 EKOX(os.path.exists(lfn))
+
+default_color_1 = 'darkblue'
+default_color_2 = 'darkgreen'
+default_color_3 = 'darkred'
+df = pd.DataFrame(ll, columns=["a", "date", "prix", "surface", "annee", "terrain"])
+EKOX(df)
+EKOX(df[["prix", "surface"]])
+sns.pairplot(data=df[["prix", "surface", "annee", "date"]],
+             diag_kws = { 'color' : default_color_3},
+             plot_kws = { 'color' : default_color_3,
+                          'alpha' : 0.5,
+                          's' : 15})
+plt.show()
+
 
 if not os.path.exists(lfn) :
 	latlong = [ geocoder.arcgis(e[0]).latlng for e in tqdm.tqdm(ll)]
@@ -76,24 +116,31 @@ else :
 
 dd = {}
 
+dd = defaultdict(list)
+
+def sel(add, elatlong) :
+	a, date, prix, surface, annee, terrain = add
+	return a, (date, prix, surface, elatlong, a)
+		
+[ sel(add, elatlong) for add, elatlong in tqdm.tqdm(zip(ll, latlong)) ]
+
 for add, elatlong in tqdm.tqdm(zip(ll, latlong)) :
-	a, date, prix, surface = add
-	if a not in dd :
-		dd[a] = []
-	#EKOX(elatlong)
+	a, date, prix, surface, annee, terrain = add
+
+	#if a not in dd :		dd[a] = []
+	EKON(add, elatlong)
 	dd[a].append((date, prix, surface, elatlong, a))
 	
-
-
 for a,vs in dd.items() :
 	def tt(x) :
 		date, prix, surface, latlong, add = x
-		return date + ", " + str(prix) + "€, " + str(surface) + "m2"
+		return str(date) + ", " + str(prix) + "€, " + str(surface) + "m2"
 	add = vs[0][4]
 
-	EKOX(vs[0][0])
-	EKOX("-".join(vs[0][0].split("/")[::-1]))
-	vs = sorted(vs, key = lambda x : "-".join(x[0].split("/")[::-1]))
+	#EKOX(vs[0][0])
+	#EKOX("-".join(vs[0][0].split("/")[::-1]))
+	#vs = sorted(vs, key = lambda x : "-".join(x[0].split("/")[::-1]))
+	vs = sorted(vs, key = lambda x : x[0].year)
 	txt = add + '<br>' + '<br>'.join(map(tt, vs))
 	elatlong = vs[0][3]
 	#EKOX(elatlong)
@@ -110,4 +157,4 @@ for a,vs in dd.items() :
         ).add_to(m)
 
 
-m.save("footprint.html")
+m.save("/mnt/NUC/www/erquy.html")

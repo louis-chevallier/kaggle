@@ -8,6 +8,9 @@ $(warning $(COMMENT))
 
 
 start :
+	CUDA_VISIBLE_DEVICES=0 python map.py 2>&1 | tee trace-$(DATE).trc
+
+start4 :
 	CUDA_VISIBLE_DEVICES=0 python tree.py 2>&1 | tee trace-$(DATE).trc
 
 
@@ -26,6 +29,9 @@ conv :
 	cp  polymer.py upload
 #	pip download utillc rdkit
 #	mv *.whl upload
+
+map :
+	python map.py
 
 upload :
 	-mkdir -p $(DATASET_FOLDER)/sources
