@@ -6,8 +6,9 @@ COMMENT=$(subst $(space),_,$(shell git log -1 --pretty=%B)$(shell git log --pret
 DATE=$(shell date +%y-%m-%d-%R)
 $(warning $(COMMENT))
 
+start : start4
 
-start :
+start5 :
 	CUDA_VISIBLE_DEVICES=0 python map.py 2>&1 | tee trace-$(DATE).trc
 
 start4 :
