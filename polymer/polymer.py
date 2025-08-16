@@ -26,6 +26,8 @@ from sklearn.model_selection import train_test_split
 import torch
 import torchvision.transforms as transforms
 
+from gbmpredictor import *
+
 do_deep=False
 
 if do_deep :
@@ -186,55 +188,6 @@ def check(d, cols) :
 	EKOX(nn.shape)
 	ddd, lll = d[:,nn], list(cols[nn])
 	return ddd, lll, pd.DataFrame(ddd, columns=lll)
-
-class GBMPredictor :
-	def __init__(self, mdl) :
-		self.mdl = mdl
-		#EKOX(mdl)
-		self.thresholds = {}
-		for i, tsd in enumerate(self.mdl["tree_info"]) :
-			tree = tsd["tree_structure"]
-			self.parse(tree, "%03d" % i)
-		EKOX(len(self.thresholds))
-	def parse(self, tree, tag) :
-		if "threshold" in tree :
-			feat_idx = tree["split_feature"]
-			threshold = tree["threshold"]
-			self.thresholds[tag] = threshold
-			self.parse(tree["left_child"], tag + "_l")
-			self.parse(tree["right_child"], tag + "_r")
-		else :
-			value = tree["leaf_value"]
-			return value
-
-	def pred2(self, row, tree, tag="") :
-		if "threshold" in tree :
-			feat_idx = tree["split_feature"]
-			threshold = tree["threshold"]
-			t = row[feat_idx] <= threshold
-			tt = t if tree["decision_type"] == "<=" else not t
-			side = "left_child" if t else "right_child"
-			return self.pred2(row, tree[side])
-		else :
-			value = tree["leaf_value"]
-			return value
-			
-	def pred1(self, row, tree_info) :
-		v = 0
-		for i, tsd in enumerate(tree_info) :
-			tree = tsd["tree_structure"]
-			v += self.pred2(row, tree, "%03d" % i)
-		return v
-
-	def predict(self, x) :
-		h, _ = x.shape
-		p = np.zeros(h)
-		for i, row in enumerate(x) :
-			p[i] = self.pred1(row, self.mdl["tree_info"])
-			
-
-		
-		return p
 
 
 def lgb_kfold(train_df, test_df, target, feats, folds):	   
