@@ -84,6 +84,7 @@ tile = folium.TileLayer(
         control = True
        ).add_to(m)
 
+#ll = [ (a, date, prix, surface, annee, terrain) for a, date, prix, surface, annee, terrain in ll if "GARENNE" in a]
 
 EKOX(myhash(str(ll)))
 
@@ -94,16 +95,6 @@ EKOX(os.path.exists(lfn))
 default_color_1 = 'darkblue'
 default_color_2 = 'darkgreen'
 default_color_3 = 'darkred'
-df = pd.DataFrame(ll, columns=["a", "date", "prix", "surface", "annee", "terrain"])
-EKOX(df)
-EKOX(df[["prix", "surface"]])
-sns.pairplot(data=df[["prix", "surface", "annee", "date"]],
-             diag_kws = { 'color' : default_color_3},
-             plot_kws = { 'color' : default_color_3,
-                          'alpha' : 0.5,
-                          's' : 15})
-plt.show()
-
 
 if not os.path.exists(lfn) :
 	latlong = [ geocoder.arcgis(e[0]).latlng for e in tqdm.tqdm(ll)]
@@ -124,10 +115,15 @@ def sel(add, elatlong) :
 		
 [ sel(add, elatlong) for add, elatlong in tqdm.tqdm(zip(ll, latlong)) ]
 
+
+
+
+
 for add, elatlong in tqdm.tqdm(zip(ll, latlong)) :
 	a, date, prix, surface, annee, terrain = add
 
 	#if a not in dd :		dd[a] = []
+	
 	EKON(add, elatlong)
 	dd[a].append((date, prix, surface, elatlong, a))
 	
@@ -142,7 +138,10 @@ for a,vs in dd.items() :
 	#vs = sorted(vs, key = lambda x : "-".join(x[0].split("/")[::-1]))
 	vs = sorted(vs, key = lambda x : x[0].year)
 	txt = add + '<br>' + '<br>'.join(map(tt, vs))
-	elatlong = vs[0][3]
+
+	date, prix, surface, elatlong, add = vs[0]	
+	colors = ["Yellow", "Orange", "Red"]
+	col = colors[ min( prix//150000, 2)]
 	#EKOX(elatlong)
 	lat, lng = elatlong
 	folium.CircleMarker(
@@ -151,10 +150,24 @@ for a,vs in dd.items() :
 		tooltip = txt,
         popup=txt,
         fill=True,
-        color='Blue',
-        fill_color='Yellow',
+        color=col,
+        fill_color='Blue',
         fill_opacity=0.6
         ).add_to(m)
 
 
 m.save("/mnt/NUC/www/erquy.html")
+df = pd.DataFrame(ll, columns=["a", "date", "prix", "surface", "annee", "terrain"])
+EKOX(df)
+EKOX(df[["prix", "surface"]])
+sns.pairplot(data=df[["prix", "surface", "terrain", "annee", "date"]],
+             diag_kws = { 'color' : default_color_3},
+             plot_kws = { 'color' : default_color_3,
+                          'alpha' : 0.5,
+                          's' : 15})
+plt.show()
+
+#sns.regplot(x=pd.to_datetime(df["date"]).dt.strftime('%Y:%m:%d'), y=df["prix"], ci=None, color="r")
+plt.scatter(df["date"], df["prix"])
+plt.show()
+
